@@ -1,15 +1,18 @@
 '''
-@ origial
--pakt publishing ML for algo trading; Jansen-
+A program to: 
+
+
+@ original source from:
+-pakt publishing ML for algorithmic trading; Stefan Jansen-
 https://github.com/PacktPublishing/Hands-On-Machine-Learning-for-Algorithmic-Trading/blob/master/Chapter08/01_stationarity_and_arima.ipynb
-
-
-
 @ notes
 singular value decomposition
-use SVD to reduce data into key features to describe dataset...
-data driven geeneralization of "fourrier transoformation"
-"use autocorrelations to compute correlation coefficients as a function of the lag" )
+use SVD to reduce data into key features to describe dataset
+data driven generalization of fourrier transoformation
+use autocorrelations to compute correlation coefficients as a function of the lag
+
+
+
 '''
 import warnings
 warnings.filterwarnings('ignore')
@@ -21,147 +24,133 @@ import statsmodels.tsa.api as tsa
 import pandas as pd
 import numpy as np 
 from numpy.linalg import LinAlgError
+import matplotlib.pyplot as plt
 
-p = os.getcwd() +'/img/'
+p = os.getcwd() +'/io/'
 
 industrial_production = web.DataReader('IPGMFN','fred','2000','2020-12').squeeze()
 print(type(industrial_production.head()))
-
 components = tsa.seasonal_decompose(industrial_production, model='additive')
 
-ts = industrial_production.to_frame('Original').assign(Trend = components.trend).assign(Seasonality=components.seasonal).assign(Residual=components.resid)
- 
-import matplotlib.pyplot as plt
-ts.plot(subplots=True, figsize=(14,8))
-plt.show()
-plt.savefig(str(p) +'1.png')
+def additive_components(components):
+    ts = industrial_production.to_frame('Original').assign(Trend = components.trend).assign(Seasonality=components.seasonal).assign(Residual=components.resid)
+    ts.plot(subplots=True, figsize=(14,8))
+    fig1 = plt.gcf()
+
+    plt.show()
+    fig1.savefig(str(p) +'Additive Components.png')
+additive_components(components)
+
+
+def differencing():
+    industrial_production = web.DataReader('IPGMFN', 'fred', '1988', '2017-12').squeeze().dropna()
+    nasdaq = web.DataReader('NASDAQCOM', 'fred', '1990', '2017-12-31').squeeze().dropna()
+    (nasdaq == 0).any(), (industrial_production==0).any()
+
+
+    nasdaq = web.DataReader('NASDAQCOM', 'fred', '1990', '2017-12-31').squeeze().dropna()
+
+
+    nasdaq_log = np.log(nasdaq)
+    industrial_production_log = np.log(industrial_production)
+
+
+    nasdaq_log_diff = nasdaq_log.diff().dropna()
+
+    # seasonal differencing => yoy instantanteous returns
+    industrial_production_log_diff = industrial_production_log.diff(12).dropna()
+
+
+    with sns.axes_style('dark'):
+        fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(14, 8))
+
+        nasdaq.plot(ax=axes[0][0],
+                    title='NASDAQ  Composite Index')
+        axes[0][0].text(x=.03,
+                        y=.85,
+                        s=f'ADF: {tsa.adfuller(nasdaq.dropna())[1]:.4f}',
+                        transform=axes[0][0].transAxes)
+        axes[0][0].set_ylabel('Index')
+
+        nasdaq_log.plot(ax=axes[1][0],
+                        sharex=axes[0][0])
+        axes[1][0].text(x=.03, y=.85,
+                        s=f'ADFl: {tsa.adfuller(nasdaq_log.dropna())[1]:.4f}',
+                        transform=axes[1][0].transAxes)
+        axes[1][0].set_ylabel('Log')
+
+        nasdaq_log_diff.plot(ax=axes[2][0],
+                            sharex=axes[0][0])
+        axes[2][0].text(x=.03, y=.85,
+                        s=f'ADF: {tsa.adfuller(nasdaq_log_diff.dropna())[1]:.4f}',
+                        transform=axes[2][0].transAxes)
+        axes[2][0].set_ylabel('Log, Diff')
+
+        industrial_production.plot(ax=axes[0][1],
+                                title='Industrial Production: Manufacturing')
+        axes[0][1].text(x=.03, y=.85,
+                        s=f'ADF: {tsa.adfuller(industrial_production)[1]:.4f}',
+                        transform=axes[0][1].transAxes)
+        axes[0][1].set_ylabel('Index')
+
+        industrial_production_log.plot(ax=axes[1][1],
+                                    sharex=axes[0][1])
+        axes[1][1].text(x=.03, y=.85,
+                        s=f'ADF: {tsa.adfuller(industrial_production_log.dropna())[1]:.4f}',
+                        transform=axes[1][1].transAxes)
+        axes[1][1].set_ylabel('Log')
+
+        industrial_production_log_diff.plot(ax=axes[2][1],
+                                            sharex=axes[0][1])
+        axes[2][1].text(x=.83, y=.85,
+                        s=f'ADF: {tsa.adfuller(industrial_production_log_diff.dropna())[1]:.4f}',
+                        transform=axes[2][1].transAxes)
+        axes[2][1].set_ylabel('Log, Seasonal Diff')
+        sns.despine()
+        fig.tight_layout()
+        fig.align_ylabels(axes)
+        fig1 = plt.gcf()
+
+        fig1.savefig(str(p)  +'Differencing.png')
+
+differencing()
 
 
 
+def autocorrelations():
+    industrial_production = web.DataReader('IPGMFN', 'fred', '1988', '2017-12').squeeze().dropna()
+    industrial_production_log = np.log(industrial_production)
+    industrial_production_log_diff = industrial_production_log.diff(12).dropna() # seasonal differencing => yoy instantanteous returns
 
 
-# time series stationarity
-industrial_production_log = np.log(industrial_production)
-industrial_production_log_diff = industrial_production_log.diff(12).dropna() # seasonal differencing => yoy instantanteous returns
+    from statsmodels.graphics.tsaplots import plot_acf, acf, plot_pacf, pacf
+    from statsmodels.tsa.stattools import acf, q_stat, adfuller
+    import statsmodels.api as sm
+    from scipy.stats import probplot, moment
+    from sklearn.metrics import mean_squared_error
+    def plot_correlogram(x, lags=None, title=None):    
+        lags = min(10, int(len(x)/5)) if lags is None else lags
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(14, 8))
+        x.plot(ax=axes[0][0])
+        q_p = np.max(q_stat(acf(x, nlags=lags), len(x))[1])
+        stats = f'Q-Stat: {np.max(q_p):>8.2f}\nADF: {adfuller(x)[1]:>11.2f}'
+        axes[0][0].text(x=.02, y=.85, s=stats, transform=axes[0][0].transAxes)
+        probplot(x, plot=axes[0][1])
+        mean, var, skew, kurtosis = moment(x, moment=[1, 2, 3, 4])
+        s = f'Mean: {mean:>12.2f}\nSD: {np.sqrt(var):>16.2f}\nSkew: {skew:12.2f}\nKurtosis:{kurtosis:9.2f}'
+        axes[0][1].text(x=.02, y=.75, s=s, transform=axes[0][1].transAxes)
+        plot_acf(x=x, lags=lags, zero=False, ax=axes[1][0])
+        plot_pacf(x, lags=lags, zero=False, ax=axes[1][1])
+        axes[1][0].set_xlabel('Lag')
+        axes[1][1].set_xlabel('Lag')
+        fig.suptitle(title, fontsize=20)
+        fig.tight_layout()
+        fig.subplots_adjust(top=.9)
 
+    plot_correlogram(industrial_production_log_diff, title='Industrial Production (Seasonal Diff)')
+    fig1 = plt.gcf()
+    plt.show()
+    fig1.savefig(str(p)  +'AutoCorrelation.png')
+autocorrelations()
 
-from statsmodels.graphics.tsaplots import plot_acf, acf, plot_pacf, pacf
-from statsmodels.tsa.stattools import acf, q_stat, adfuller
-import statsmodels.api as sm
-from scipy.stats import probplot, moment
-from sklearn.metrics import mean_squared_error
-def plot_correlogram(x, lags=None, title=None):    
-    lags = min(10, int(len(x)/5)) if lags is None else lags
-    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(14, 8))
-    x.plot(ax=axes[0][0])
-    q_p = np.max(q_stat(acf(x, nlags=lags), len(x))[1])
-    stats = f'Q-Stat: {np.max(q_p):>8.2f}\nADF: {adfuller(x)[1]:>11.2f}'
-    axes[0][0].text(x=.02, y=.85, s=stats, transform=axes[0][0].transAxes)
-    probplot(x, plot=axes[0][1])
-    mean, var, skew, kurtosis = moment(x, moment=[1, 2, 3, 4])
-    s = f'Mean: {mean:>12.2f}\nSD: {np.sqrt(var):>16.2f}\nSkew: {skew:12.2f}\nKurtosis:{kurtosis:9.2f}'
-    axes[0][1].text(x=.02, y=.75, s=s, transform=axes[0][1].transAxes)
-    plot_acf(x=x, lags=lags, zero=False, ax=axes[1][0])
-    plot_pacf(x, lags=lags, zero=False, ax=axes[1][1])
-    axes[1][0].set_xlabel('Lag')
-    axes[1][1].set_xlabel('Lag')
-    fig.suptitle(title, fontsize=20)
-    fig.tight_layout()
-    fig.subplots_adjust(top=.9)
-
-plot_correlogram(industrial_production_log_diff, title='Industrial Production (Seasonal Diff)')
-plt.show()
-plt.savefig(str(p)  +'2.png')
-
-'''
-@ notes
-
-Univariate time series models
-"Univariate time series models relate the value of the time series at the point in time of interest to a linear combination of lagged values "
-Autoregressive models
---
-
-ARIMA = autoregressive integrated moving average: como of autoregression and moving averages to find complementary aspects 
-seasonal autoregressive moving average model with exogenous inputs....
-SARIMAX - Seasonal
-
-We iterate over various (p, q) lag combinations and collect diagnostic statistics to compare the result.
-
-
-'''
-
-model1 = tsa.statespace.SARIMAX(industrial_production_log, order=(2,0,2), seasonal_order=(0,1,0,12)).fit()
-model2 = tsa.statespace.SARIMAX(industrial_production_log_diff, order=(2,0,2), seasonal_order=(0,0,0,12)).fit()
-model1.params.to_frame('SARIMAX').join(model2.params.to_frame('diff'))
-
-train_size = 120
-test_results = {}
-y_true = industrial_production_log_diff.iloc[train_size:]
-for p in range(5):
-    for q in range(5):
-        aic, bic = [], []
-        if p == 0 and q == 0:
-            continue
-        print(p, q)
-        convergence_error = stationarity_error = 0
-        y_pred = []
-        for T in range(train_size, len(industrial_production_log_diff)):
-            train_set = industrial_production_log_diff.iloc[T-train_size:T]
-            try:
-                model = tsa.ARMA(endog=train_set, order=(p, q)).fit()
-            except LinAlgError:
-                convergence_error += 1
-            except ValueError:
-                stationarity_error += 1
-
-            forecast, _, _ = model.forecast(steps=1)
-            y_pred.append(forecast[0])
-            aic.append(model.aic)
-            bic.append(model.bic)
-
-        result = (pd.DataFrame({'y_true': y_true, 'y_pred': y_pred})
-                  .replace(np.inf, np.nan)
-                  .dropna())
-
-        rmse = np.sqrt(mean_squared_error(
-            y_true=result.y_true, y_pred=result.y_pred))
-
-        test_results[(p, q)] = [rmse,
-                                np.mean(aic),
-                                np.mean(bic),
-                                convergence_error,
-                                stationarity_error]
-
-test_results = pd.DataFrame(test_results).T
-test_results.columns = ['RMSE', 'AIC', 'BIC', 'convergence', 'stationarity']
-test_results.index.names = ['p', 'q']
-test_results.info()
-test_results.dropna()
-sns.heatmap(test_results.RMSE.unstack().mul(10), fmt='.2', annot=True, cmap='Blues_r')
-plt.show()
-plt.savefig(str(p)  +'3.png')
-
-
-sns.heatmap(test_results.BIC.unstack(), fmt='.2f', annot=True, cmap='Blues_r')
-plt.show()
-
-model = tsa.ARMA(endog=industrial_production_log_diff, order=(0, 4)).fit()
-print(model.summary())
-plot_correlogram(model.resid)
-plt.show()
-plt.savefig(str(p)  +'4.png')
-
-
-print(df[['RMSE', 'AIC', 'BIC']].sort_values('RMSE').head())
-df[['RMSE', 'AIC', 'BIC']].corr('spearman')
-sns.jointplot(y='RMSE', x='BIC', data=df[['RMSE', 'BIC']].rank())
-df[(df.RMSE<df.RMSE.quantile(.05))&(df.BIC<df.BIC.quantile(.1))]
-
-
-best_model = tsa.SARIMAX(endog=industrial_production_log_diff, order=(2, 0, 3),
-                         seasonal_order=(1, 0, 0, 12)).fit()
-print(best_model.summary())
-plot_correlogram(best_model.resid, lags=20, title='Residuals')
-plt.show()
-plt.savefig(str(p)  +'5.png')
 
