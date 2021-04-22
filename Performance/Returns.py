@@ -65,7 +65,7 @@ def price_returns(symbol = [], date_start = None, date_end = today, time_sample 
 
 
 
-def portfolio_returns(arr = [], weights = [], date_start = '2021-01-01', date_end = today, time_sample='D', cumulative= True, plot = False):
+def portfolio_returns(arr = [], weights = [], date_start = '2021-01-01', date_end = today, time_sample='D', cumulative= False, plot = False):
     """
     column bind time series of historical stock returns for an array of individual securities
     _________
@@ -80,10 +80,12 @@ def portfolio_returns(arr = [], weights = [], date_start = '2021-01-01', date_en
     :rtype: pd.dataframe
     _________
     """
-    df_returns = yf.download(arr,date_start)['Adj Close'].pct_change()[1:]
-    weighted_returns = (weights * df_returns)
-    port_ret = weighted_returns.sum(axis=1)
-    print(port_ret)
+    if cumulative == False:
+        ''' series of daily price returns (i.e. pct changes over time) '''
+        df_returns = yf.download(arr,date_start)['Adj Close'].pct_change()[1:]
+        weighted_returns = (weights * df_returns)
+        df_returns['weighted_returns'] = weighted_returns.sum(axis=1)
+
 
     if plot == True:
         def histogram():
@@ -98,7 +100,8 @@ def portfolio_returns(arr = [], weights = [], date_start = '2021-01-01', date_en
         histogram()
 
         def multiplot():
-            ((port_ret.pct_change()+1).cumprod()).plot(figsize=(10, 7))
+            ''' assumes cumulative retunrs compounding over time '''
+            ((df_returns['weighted_returns'].pct_change()+1).cumprod()).plot(figsize=(10, 7))
             plt.legend()
             plt.title("Returns", fontsize=16)
             plt.ylabel('Cumulative Returns', fontsize=14)
@@ -107,19 +110,6 @@ def portfolio_returns(arr = [], weights = [], date_start = '2021-01-01', date_en
             plt.show()
         multiplot()
 
-
-    returns = port_ret
-    return returns
+    return df_returns['weighted_returns']
 
 #returns = portfolio_returns(arr = ['MSFT','AAPL'], weights = [0.5,0.5], date_start = '2020-01-01', date_end = today, time_sample='D', cumulative= True, plot = True)
-
-
-# def plot_returns():
-#     import matplotlib.pyplot as plt 
-#     ((df.pct_change()+1).cumprod()).plot(figsize=(10, 7))
-#     plt.legend()
-#     plt.title(f"Returns for {arr}", fontsize=16)
-#     plt.ylabel('Cumulative Returns', fontsize=14)
-#     plt.xlabel('Year', fontsize=14)
-#     plt.grid(which="major", color='k', linestyle='-.', linewidth=0.5)
-#     plt.show()
