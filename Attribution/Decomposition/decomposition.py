@@ -154,7 +154,7 @@ plt.savefig(str(p)  +'4.png')
 
 print(df[['RMSE', 'AIC', 'BIC']].sort_values('RMSE').head())
 df[['RMSE', 'AIC', 'BIC']].corr('spearman')
-sns.jointplot(y='RMSE', x='BIC', data=df[['RMSE', 'BIC']].rank());
+sns.jointplot(y='RMSE', x='BIC', data=df[['RMSE', 'BIC']].rank())
 df[(df.RMSE<df.RMSE.quantile(.05))&(df.BIC<df.BIC.quantile(.1))]
 
 
