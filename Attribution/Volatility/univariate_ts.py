@@ -121,14 +121,14 @@ def univariate_time_series_model():
     sns.heatmap(test_results.RMSE.unstack().mul(10), fmt='.2', annot=True, cmap='Blues_r')
     fig1 = plt.gcf()
     plt.show()
-    fig1.savefig(f'{p}RMSE_heatmap.png')
+    fig1.savefig(f'{str(p)}RMSE_heatmap.png')
 
 
 
     sns.heatmap(test_results.BIC.unstack(), fmt='.2f', annot=True, cmap='Blues_r')
     fig2 = plt.gcf()
     plt.show()
-    fig2.savefig(f'{p}BIC_heatmap.png')
+    fig2.savefig(f'{str(p)}BIC_heatmap.png')
 
     model = tsa.ARMA(endog=industrial_production_log_diff, order=(0, 4)).fit()
     print(model.summary())
