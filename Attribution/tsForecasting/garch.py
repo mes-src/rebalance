@@ -26,7 +26,7 @@ from arch.univariate import ConstantMean, GARCH, Normal
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sys,os
-p = os.getcwd() +'/io/'
+iop = os.getcwd() +'/io/'
 
 
 def plot_correlogram(x, lags=None, title=None):    
@@ -51,14 +51,14 @@ def plot_correlogram(x, lags=None, title=None):
     fig.subplots_adjust(top=.9)
     fig1 = plt.gcf()
     plt.show()
-    fig1.savefig(f'{str(p)}{title}.png')
+    fig1.savefig(f'{str(iop)}{title}.png')
 
 
 nasdaq = web.DataReader('NASDAQCOM', 'fred', '2000', '2020').squeeze()
 nasdaq_returns = np.log(nasdaq).diff().dropna().mul(100) # rescale to faciliate optimization
 
-plot_correlogram(nasdaq_returns, lags=250, title='NASDAQ Daily Returns')
-plot_correlogram(nasdaq_returns.sub(nasdaq_returns.mean()).pow(2), lags=120, title='NASDAQ Daily Volatility')
+plot_correlogram(nasdaq_returns, lags=250, title=' Daily Returns')
+plot_correlogram(nasdaq_returns.sub(nasdaq_returns.mean()).pow(2), lags=120, title=' Daily Volatility')
 
 
 
@@ -90,7 +90,7 @@ s = s.unstack().sort_index(ascending=False)
 
 sns.heatmap(s, cmap='Blues', annot=True, fmt='.4f')
 plt.title('Out-of-Sample RMSE')
-plt.savefig(f'{str(p)}Out-of-Sample RMSE.png')
+plt.savefig(f'{str(iop)}Out-of-Sample RMSE.png')
 
 
 
@@ -107,6 +107,4 @@ fig = best_model.plot(annualize='D')
 fig.set_size_inches(12, 8)
 fig.tight_layout()
 
-plot_correlogram(best_model.resid.dropna(),
-                 lags=250,
-                 title='GARCH Residuals')
+plot_correlogram(best_model.resid.dropna(), lags=250, title='GARCH Residuals')

@@ -37,7 +37,7 @@ print(industrial_production.head())
 print(type(industrial_production.head()))
 components = tsa.seasonal_decompose(industrial_production, model='additive')
 
-def additive_components(components):
+def additive_components(components, the_title=None):
     ts = industrial_production.to_frame('Original').assign(Trend = components.trend).assign(Seasonality=components.seasonal).assign(Residual=components.resid)
     ts.plot(subplots=True, figsize=(14,8))
     fig1 = plt.gcf()

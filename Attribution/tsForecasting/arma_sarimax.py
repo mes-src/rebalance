@@ -16,23 +16,13 @@ from statsmodels.tsa.stattools import acf, q_stat, adfuller
 import statsmodels.api as sm
 from scipy.stats import probplot, moment
 from sklearn.metrics import mean_squared_error
+from datetime import date 
 
-p = os.getcwd() +'/io/'
+iop = os.getcwd() +'/io/'
 '''
 @ original source from:
 -pakt publishing ML for algorithmic trading; Stefan Jansen-
 https://github.com/PacktPublishing/Machine-Learning-for-Algorithmic-Trading-Second-Edition/blob/master/09_time_series_models/02_arima_models.ipynb
-Univariate time series models
-"Univariate time series models relate the value of the time series at the point in time of interest to a linear combination of lagged values "
-Autoregressive models
---
-
-ARIMA = autoregressive integrated moving average: como of autoregression and moving averages to find complementary aspects 
-seasonal autoregressive moving average model with exogenous inputs....
-SARIMAX - Seasonal
-
-We iterate over various (p, q) lag combinations and collect diagnostic statistics to compare the result.
-
 
 '''
 
@@ -41,7 +31,7 @@ def plot_model_summary(model_summary, title = None):
     plt.text(0.01, 0.05, str(model_summary), {'fontsize': 10}, fontproperties = 'monospace') # approach improved by OP -> monospace!
     plt.axis('off')
     plt.tight_layout()
-    plt.savefig(f'{str(p)}{title}.png')
+    plt.savefig(f'{str(iop)}{title}.png')
 
 
 def plot_correlogram(x, lags=None, title=None):    
@@ -66,31 +56,45 @@ def plot_correlogram(x, lags=None, title=None):
     fig.subplots_adjust(top=.9)
     fig1 = plt.gcf()
     plt.show()
-    fig1.savefig(f'{str(p)}{title}.png')
+    fig1.savefig(f'{str(iop)}{title}.png')
 
+
+def get_data():
+
+    import yfinance as yf 
+    time_series = yf.download('X','2010-01-01')['Adj Close'].squeeze().dropna()
+    time_series_log = np.log(time_series)
+    time_series_log_diff = time_series_log.diff(12).dropna()
+    # print(time_series_log.isna().sum())
+
+
+    ''' industrial production '''
+    # time_series = web.DataReader('IPGMFN', 'fred', '1988', '2017-12').squeeze().dropna()
+    # time_series_log = np.log(time_series)
+    # time_series_log_diff = time_series_log.diff(12).dropna()
+
+    return (time_series, time_series_log, time_series_log_diff)
 
 
 def univariate_time_series_model():
-    industrial_production = web.DataReader('IPGMFN', 'fred', '1988', '2017-12').squeeze().dropna()
-    industrial_production_log = np.log(industrial_production)
-    industrial_production_log_diff = industrial_production_log.diff(12).dropna()
 
-    ''' general ARMA '''
-    model = tsa.ARMA(endog=industrial_production_log_diff, order=(1, 4)).fit()
+    time_series, time_series_log, time_series_log_diff = get_data()
+
+    ''' ARMA '''
+    model = tsa.ARMA(endog=time_series_log_diff, order=(1, 6)).fit() #(1,4)
     print(model.summary())
-    plot_model_summary(model.summary(), title = 'ARMA_model_summary')
+    plot_model_summary(model.summary(), title = 'ARMA_model_summary_00')
     plot_correlogram(model.resid, title='arma_corr')
 
 
-
-    model1 = tsa.statespace.SARIMAX(industrial_production_log, order=(2,0,2), seasonal_order=(0,1,0,12)).fit()
-    model2 = tsa.statespace.SARIMAX(industrial_production_log_diff, order=(2,0,2), seasonal_order=(0,0,0,12)).fit()
-    print(model1.params.to_frame('SARIMAX').join(model2.params.to_frame('diff')))
-
-    ''' find optimal ARMA lags "We iterate over various (p, q) lag combinations and collect diagnostic statistics to compare the result." '''
+    '''
+    find optimal ARMA lags "We iterate over various (p, q) lag combinations 
+    and collect diagnostic statistics to compare the result." 
+    '''
+    
     train_size = 120
     test_results = {}
-    y_true = industrial_production_log_diff.iloc[train_size:]
+    y_true = time_series_log_diff.iloc[train_size:]
     for p in range(5):
         for q in range(5):
             aic, bic = [], []
@@ -99,10 +103,10 @@ def univariate_time_series_model():
             print(p, q)
             convergence_error = stationarity_error = 0
             y_pred = []
-            for T in range(train_size, len(industrial_production_log_diff)):
-                train_set = industrial_production_log_diff.iloc[T-train_size:T]
+            for T in range(train_size, len(time_series_log_diff)):
+                train_set = time_series_log_diff.iloc[T-train_size:T] # split data into test train to prevent overfitting when predicting
                 try:
-                    model = tsa.ARMA(endog=train_set, order=(p, q)).fit()
+                    model = tsa.ARMA(endog=train_set, order=(p, q)).fit() # fit model by iterating through p,q values
                 except LinAlgError:
                     convergence_error += 1
                 except ValueError:
@@ -113,55 +117,51 @@ def univariate_time_series_model():
                 aic.append(model.aic)
                 bic.append(model.bic)
 
-            result = (pd.DataFrame({'y_true': y_true, 'y_pred': y_pred})
+            result = (pd.DataFrame({'y_true': y_true, 'y_pred': y_pred}) # collect results of this instance of the iteration
                     .replace(np.inf, np.nan)
                     .dropna())
 
             rmse = np.sqrt(mean_squared_error(
-                y_true=result.y_true, y_pred=result.y_pred))
+                y_true=result.y_true, y_pred=result.y_pred)) # calculate prediction error
 
             test_results[(p, q)] = [rmse,
                                     np.mean(aic),
                                     np.mean(bic),
                                     convergence_error,
-                                    stationarity_error]
+                                    stationarity_error] # aggregate results of each p,q iteration
+
 
     test_results = pd.DataFrame(test_results).T
     test_results.columns = ['RMSE', 'AIC', 'BIC', 'convergence', 'stationarity']
     test_results.index.names = ['p', 'q']
     test_results.info()
     test_results.dropna()
+
     print(test_results.nsmallest(5, columns=['RMSE']))
     print(test_results.nsmallest(5, columns=['BIC']))
 
     sns.heatmap(test_results.RMSE.unstack().mul(10), fmt='.2', annot=True, cmap='Blues_r')
     fig1 = plt.gcf()
     plt.show()
-    fig1.savefig(f'{str(p)}RMSE_heatmap.png')
+    fig1.savefig(f'{str(iop)}RMSE_heatmap.png')
 
     sns.heatmap(test_results.BIC.unstack(), fmt='.2f', annot=True, cmap='Blues_r')
     fig2 = plt.gcf()
     plt.show()
-    fig2.savefig(f'{str(p)}BIC_heatmap.png')
+    fig2.savefig(f'{str(iop)}BIC_heatmap.png')
 
 
-  
-
-
-    ''' utilize optimized ARMA lags'''
-    best_p, best_q = test_results.rank().loc[:, ['RMSE', 'BIC']].mean(1).idxmin()
-    best_arma_model = tsa.ARMA(endog=industrial_production_log_diff, order=(best_p, best_q)).fit()
+    ''' use optimized ARMA lags to refit model '''
+    best_p, best_q = test_results.rank().loc[:, ['RMSE', 'BIC']].mean(1).idxmin()  # utilize best p,q values as determined by lowest RMSE,BIC
+    best_arma_model = tsa.ARMA(endog=time_series_log_diff, order=(best_p, best_q)).fit()
     print(best_arma_model.summary())
-    plot_model_summary(model.summary(), title = 'Best_ARMA_model_summary')
+    plot_model_summary(best_arma_model.summary(), title = 'best_ARMA_model_summary')
     plot_correlogram(best_arma_model.resid, lags=20, title='Residuals_ARMA')
  
-    ''' SARIMAX '''
-    best_model = tsa.SARIMAX(endog=industrial_production_log_diff, order=(2, 0, 3),
-                            seasonal_order=(1, 0, 0, 12)).fit()
-    print(best_model.summary())
-    plot_model_summary(model.summary(), title = 'SARIMAX_model_summary')
-    plot_correlogram(best_model.resid, lags=20, title='Residuals_SARIMAX')
- 
+
+
+
+
 
 
 univariate_time_series_model()
