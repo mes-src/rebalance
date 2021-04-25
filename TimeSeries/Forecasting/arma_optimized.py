@@ -76,14 +76,15 @@ def get_data(d):
 
 
 def univariate_time_series_model():
-    ''' @ set params '''
+    
+    ''' ___ @ set params ___ '''
     initial_p, initial_q = (1,4)
     pq_iterations = 5
-    # p_values = [0, 1, 2, 4, 6, 8, 10]
-    # d_values = range(0, 3)
-    # q_values = range(0, 3)
-    d = 12
-
+    # p_values = [0, 1, 2, 4, 6, 8, 10] # Autoregressive order ---> use the maximum statisticaly significant lag from partial auto correlation plot
+    # d_values = range(0, 3) # integration order
+    # q_values = range(0, 3) # moving average order --> use the maximum statistically significant lag from auto correlation plot
+    d = 12 # d = 0 if series is stationary; use dicky fuller test to determine --> see decomposition.py
+    ''' ___________________  '''
 
     series_name, time_series, time_series_log, time_series_log_diff = get_data(d)
 
